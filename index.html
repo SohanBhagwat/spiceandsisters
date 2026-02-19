@@ -194,10 +194,10 @@ thead .col-tarief, thead .col-aantal, thead .col-bedrag { text-align:right; }
 
 <!-- ═══ EDITOR ═══ -->
 <div id="editor">
-  <h2>✏️ Offerte invullen</h2>
+  <h2>Maak een offerte</h2>
 
   <label>Offertenummer</label>
-  <input type="text" id="inv-number" placeholder="bijv. 20250101">
+  <input type="text" id="inv-number" placeholder="bijv. 2025032101">
 
   <div class="row2" style="margin-top:4px">
     <div><label>Offertedatum</label><input type="date" id="inv-date"></div>
@@ -205,13 +205,13 @@ thead .col-tarief, thead .col-aantal, thead .col-bedrag { text-align:right; }
   </div>
 
   <label>Betreft</label>
-  <input type="text" id="inv-subject" placeholder="bijv. Kerstviering ouderen op 19-12-2025">
+  <input type="text" id="inv-subject" placeholder="Bruiloft 18 juli 2025">
 
-  <label>T.a.v. (naam)</label>
-  <input type="text" id="inv-contact" placeholder="bijv. Cynthia Soekhoe">
+  <label>Naam</label>
+  <input type="text" id="inv-contact" placeholder="Sohan Bhagwat">
 
   <label>Organisatie</label>
-  <input type="text" id="inv-org" placeholder="bijv. Stichting Sewa By Do Saathi">
+  <input type="text" id="inv-org" placeholder="McDonald's B.V.">
 
   <div class="section-title">Regelitems</div>
   <div id="items-list"></div>
@@ -225,7 +225,7 @@ thead .col-tarief, thead .col-aantal, thead .col-bedrag { text-align:right; }
   </div>
 
   <div id="actions">
-    <button id="preview-btn">👁 Voorbeeld &amp; Exporteer PDF</button>
+    <button id="preview-btn">Voorbeeld &amp; Exporteer PDF</button>
   </div>
 </div>
 
@@ -259,12 +259,12 @@ const products = [
   {name:"Masala chai",            aantal:300, tarief:2.00},
   {name:"Masala chai",            aantal:400, tarief:2.00},
   {name:"Masala chai",            aantal:500, tarief:1.90},
-  {name:"Masala chai cake vegan", aantal:50,  tarief:4.99},
-  {name:"Masala chai cake vegan", aantal:100, tarief:4.80},
-  {name:"Masala chai cake vegan", aantal:200, tarief:4.75},
-  {name:"Masala chai cake vegan", aantal:300, tarief:4.75},
-  {name:"Masala chai cake vegan", aantal:400, tarief:4.75},
-  {name:"Masala chai cake vegan", aantal:500, tarief:4.75},
+  {name:"Très leches cake",       aantal:50,  tarief:4.99},
+  {name:"Très leches cake",       aantal:100, tarief:4.80},
+  {name:"Très leches cake",       aantal:200, tarief:4.75},
+  {name:"Très leches cake",       aantal:300, tarief:4.75},
+  {name:"Très leches cake",       aantal:400, tarief:4.75},
+  {name:"Très leches cake",       aantal:500, tarief:4.75},
   {name:"Mango lassi",            aantal:100, tarief:3.75},
   {name:"Mango lassi",            aantal:200, tarief:3.00},
   {name:"Mango lassi",            aantal:300, tarief:3.00},
