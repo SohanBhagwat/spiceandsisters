@@ -194,14 +194,20 @@ thead .col-tarief, thead .col-aantal, thead .col-bedrag { text-align:right; }
 
 <!-- ═══ EDITOR ═══ -->
 <div id="editor">
-  <h2>Maak een offerte</h2>
+  <h2 id="editor-title">Maak een offerte</h2>
 
-  <label>Offertenummer</label>
+  <label>Type document</label>
+  <select id="doc-kind">
+    <option value="offerte" selected>Offerte</option>
+    <option value="factuur">Factuur</option>
+  </select>
+
+  <label id="lbl-number">Offertenummer</label>
   <input type="text" id="inv-number" placeholder="bijv. 2025032101">
 
   <div class="row2" style="margin-top:4px">
-    <div><label>Offertedatum</label><input type="date" id="inv-date"></div>
-    <div><label>Vervaldatum</label><input type="date" id="inv-expiry"></div>
+    <div><label id="lbl-date">Offertedatum</label><input type="date" id="inv-date"></div>
+    <div><label id="lbl-expiry">Vervaldatum</label><input type="date" id="inv-expiry"></div>
   </div>
 
   <label>Betreft</label>
@@ -221,6 +227,7 @@ thead .col-tarief, thead .col-aantal, thead .col-bedrag { text-align:right; }
   <div class="row3">
     <div><label>BTW %</label><input type="number" id="btw-pct" value="9" step="0.1"></div>
     <div><label>Korting (€)</label><input type="number" id="korting" value="0" step="0.01"></div>
+    <div><label>Aanbetaling (€)</label><input type="number" id="aanbetaling" value="0" step="0.01"></div>
     <div><label>Subtotaal</label><input id="sub-display" readonly style="background:#f5f5f5"></div>
   </div>
 
@@ -249,27 +256,27 @@ thead .col-tarief, thead .col-aantal, thead .col-bedrag { text-align:right; }
 <script>
 // ═══ PRODUCT DATABASE ═══
 const products = [
-  {name:"Chaat",                  aantal:100, tarief:3.23},
-  {name:"Chaat",                  aantal:200, tarief:2.65},
-  {name:"Chaat",                  aantal:300, tarief:2.24},
-  {name:"Chaat",                  aantal:400, tarief:2.01},
-  {name:"Chaat",                  aantal:500, tarief:1.88},
-  {name:"Masala chai",            aantal:100, tarief:3.00},
-  {name:"Masala chai",            aantal:200, tarief:2.50},
-  {name:"Masala chai",            aantal:300, tarief:2.00},
-  {name:"Masala chai",            aantal:400, tarief:2.00},
-  {name:"Masala chai",            aantal:500, tarief:1.90},
-  {name:"Très leches cake",       aantal:50,  tarief:4.99},
-  {name:"Très leches cake",       aantal:100, tarief:4.80},
-  {name:"Très leches cake",       aantal:200, tarief:4.75},
-  {name:"Très leches cake",       aantal:300, tarief:4.75},
-  {name:"Très leches cake",       aantal:400, tarief:4.75},
-  {name:"Très leches cake",       aantal:500, tarief:4.75},
-  {name:"Mango lassi",            aantal:100, tarief:3.75},
-  {name:"Mango lassi",            aantal:200, tarief:3.00},
-  {name:"Mango lassi",            aantal:300, tarief:3.00},
-  {name:"Mango lassi",            aantal:400, tarief:3.00},
-  {name:"Mango lassi",            aantal:500, tarief:3.00},
+  {name:"Chaat",                  aantal:100, tarief:3.23/1.09},
+  {name:"Chaat",                  aantal:200, tarief:2.65/1.09},
+  {name:"Chaat",                  aantal:300, tarief:2.24/1.09},
+  {name:"Chaat",                  aantal:400, tarief:2.01/1.09},
+  {name:"Chaat",                  aantal:500, tarief:1.88/1.09},
+  {name:"Masala chai",            aantal:100, tarief:3.00/1.09},
+  {name:"Masala chai",            aantal:200, tarief:2.50/1.09},
+  {name:"Masala chai",            aantal:300, tarief:2.00/1.09},
+  {name:"Masala chai",            aantal:400, tarief:2.00/1.09},
+  {name:"Masala chai",            aantal:500, tarief:1.90/1.09},
+  {name:"Très leches cake",       aantal:50,  tarief:4.99/1.09},
+  {name:"Très leches cake",       aantal:100, tarief:4.80/1.09},
+  {name:"Très leches cake",       aantal:200, tarief:4.75/1.09},
+  {name:"Très leches cake",       aantal:300, tarief:4.75/1.09},
+  {name:"Très leches cake",       aantal:400, tarief:4.75/1.09},
+  {name:"Très leches cake",       aantal:500, tarief:4.75/1.09},
+  {name:"Mango lassi",            aantal:100, tarief:3.75/1.09},
+  {name:"Mango lassi",            aantal:200, tarief:3.00/1.09},
+  {name:"Mango lassi",            aantal:300, tarief:3.00/1.09},
+  {name:"Mango lassi",            aantal:400, tarief:3.00/1.09},
+  {name:"Mango lassi",            aantal:500, tarief:3.00/1.09},
 ];
 
 const groups = {};
@@ -521,8 +528,8 @@ const SVG_TEMPLATE = `<svg width="595" height="842" viewBox="0 0 595 842" fill="
 <rect width="595" height="842" fill="#1E1E1E"/>
 <rect width="595" height="842" fill="white"/>
 <text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="41" y="236.2">T.a.v. {{client_name}}&#x2028;</tspan><tspan x="41" y="254.2">{{company_name}}</tspan></text>
-<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" font-weight="300" letter-spacing="0em"><tspan x="85" y="777.35">Gaat u akkoord met de offerte? Stuur ons dan een e-mail met uw bevestiging.</tspan></text>
-<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="41" y="344.2">Offertedatum:&#10;</tspan><tspan x="41" y="362.2">Vervaldatum:&#10;</tspan><tspan x="41" y="380.2">Betreft:</tspan></text>
+<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" font-weight="300" letter-spacing="0em"><tspan x="297.5" y="795.35" text-anchor="middle">{{doc_type_description}}</tspan></text>
+<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="41" y="344.2">{{doc_type_date}}:&#10;</tspan><tspan x="41" y="362.2">{{doc_expiry_date}}:&#10;</tspan><tspan x="41" y="380.2">Betreft:</tspan></text>
 <text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="182" y="344.2">{{invoice_date}}&#10;</tspan><tspan x="182" y="362.2">{{invoice_expiry_date}}&#10;</tspan><tspan x="182" y="380.2">{{regarding}}</tspan></text>
 <rect x="13" y="421" width="568" height="31" fill="#9375A5"/>
 <text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0em"><tspan x="41" y="441.2">Omschrijving</tspan></text>
@@ -539,14 +546,16 @@ const SVG_TEMPLATE = `<svg width="595" height="842" viewBox="0 0 595 842" fill="
 <text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="41" y="603.2">Subtotaal</tspan></text>
 <text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="41" y="621.2">BTW </tspan></text>
 <text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="41" y="639.2">Korting</tspan></text>
-<rect x="13" y="654" width="568" height="31" fill="#9375A5"/>
-<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="484" y="674.2">{{total}}</tspan></text>
-<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0em"><tspan x="41" y="674.2">Totaal</tspan></text>
+<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="41" y="657.2">Aanbetaling</tspan></text>
+<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="484" y="657.2">{{pre-payment}}</tspan></text>
+<rect x="13" y="672" width="568" height="31" fill="#9375A5"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="484" y="692.2">{{total}}</tspan></text>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0em"><tspan x="41" y="692.2">Totaal</tspan></text>
 <text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="484" y="480.2">{{line_total}}</tspan></text>
 <text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="452.047" y="78.2">Spice and Sisters</tspan></text>
 <text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="413.34" y="107.2">KvK-nummer: 97840351&#10;</tspan><tspan x="364.297" y="125.2">BTW-nummer: NL868254848B01&#10;</tspan><tspan x="398.902" y="143.2">IBAN: NL68INGB0749814713</tspan></text>
 <text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="408.27" y="172.2">Mobiel: +31 6 31 36 94 59&#10;</tspan><tspan x="348.844" y="190.2">E-mail: info@spiceandsisters.com</tspan></text>
-<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="24" font-weight="300" letter-spacing="0em"><tspan x="41" y="196.4">Offerte {{invoice_number}</tspan></text>
+<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="24" font-weight="300" letter-spacing="0em"><tspan x="41" y="196.4">{{doc_type}} {{invoice_number}}</tspan></text>
 <path d="M260.643 80.011C260.576 80.0322 260.359 80.0826 260.129 80.1361C259.914 80.1859 259.67 80.2423 259.611 80.2621L259.583 80.2669C259.119 80.2803 258.791 80.6449 258.443 81.0311C258.322 81.1663 258.195 81.3062 258.064 81.4295C257.063 82.3631 255.638 82.3789 254.26 82.3941C253.73 82.4002 253.182 82.406 252.669 82.4648C250.528 82.7111 248.392 84.0671 246.809 86.1847C246.684 86.3536 246.561 86.5258 246.439 86.6982C246.062 87.2292 245.673 87.7785 245.176 88.2193C244.643 88.6915 244.004 89.0248 243.386 89.3473C241.751 90.2008 240.059 91.0833 238.24 91.6419C236.258 92.2502 234.063 92.3556 232.369 91.9235L232.417 91.736C234.078 92.1596 236.233 92.055 238.183 91.4566C239.985 90.9033 241.668 90.0251 243.296 89.1758C243.903 88.8588 244.532 88.531 245.047 88.0745C245.527 87.649 245.91 87.1087 246.28 86.5868C246.404 86.4129 246.527 86.2389 246.654 86.0691C248.268 83.9092 250.452 82.5253 252.647 82.2727C253.17 82.2125 253.723 82.2062 254.258 82.2007C255.661 82.1849 256.986 82.1703 257.931 81.288C258.057 81.1708 258.18 81.0342 258.299 80.9018C258.656 80.5056 259.024 80.096 259.565 80.0738C259.646 80.0495 259.86 80 260.086 79.9475C260.301 79.8974 260.524 79.8455 260.583 79.8267L260.643 80.011Z" fill="url(#paint0_linear_51_2)"/>
 <path d="M240.213 95.4882C239.502 95.5309 238.987 95.6706 238.288 95.6566C237.821 95.6549 237.356 95.6182 236.893 95.6104C236.564 95.6166 236.235 95.6454 235.909 95.595C235.777 95.5775 235.521 95.5291 235.385 95.4827C235.505 95.5443 235.633 95.587 235.763 95.6297C236.311 95.8081 236.898 95.7616 237.464 95.8567C238.361 96.0037 239.242 95.864 240.044 95.7751C240.557 95.7422 241.074 95.7092 241.568 95.5503C242.251 95.329 242.879 94.959 243.522 94.6413C242.399 95.0399 241.344 95.4999 240.213 95.4882Z" fill="url(#paint1_linear_51_2)"/>
 <path d="M261.447 84.8637L260.475 82.1642C260.478 83.873 260.581 85.4889 260.686 87.0546L260.696 87.189C260.767 88.2299 260.848 89.4101 260.224 90.2952L259.995 90.6206L260.049 90.2263C260.074 90.0457 260.083 89.8807 260.078 89.7364C259.85 91.1958 258.931 92.4591 258.04 93.6851C257.762 94.067 257.475 94.4618 257.217 94.8529C256.887 95.3527 256.583 95.8828 256.289 96.3952C255.85 97.1613 255.396 97.9538 254.843 98.666C254.207 99.4857 252.87 100.874 251.053 100.964L250.671 100.983L250.997 100.785C251.274 100.617 251.541 100.475 251.799 100.337C252.274 100.085 252.71 99.8529 253.061 99.5259C251.922 100.361 250.365 100.64 248.84 100.847L245.133 101.351C243.736 101.541 242.491 101.653 241.4 101.093L240.886 100.829L241.459 100.911C242.191 101.016 242.939 100.997 243.662 100.857C242.61 100.858 241.544 100.675 240.523 100.333L240.522 100.336C238.946 100.048 237.223 99.1546 235.794 97.8844C235.157 97.3176 234.55 96.7009 233.962 96.1043C233.36 95.4928 232.738 94.8606 232.085 94.2854C229.508 92.0128 226.22 90.4553 222.827 89.9002L222.687 89.8774L222.759 89.7554C223.274 88.8909 224.849 88.777 226.081 88.8338C227.13 88.8818 228.096 89.3202 228.984 89.7868C229.528 90.0724 230.091 90.3916 230.599 90.8019C230.548 90.7042 230.497 90.606 230.447 90.509L230.319 90.2647L230.572 90.375C231.699 90.8684 232.677 91.8021 233.647 93.3135C233.928 93.7501 234.193 94.2061 234.449 94.6466C234.894 95.4121 235.353 96.2031 235.906 96.9078C237.92 99.4755 241.406 100.964 244.579 100.612L245.442 100.517L244.622 100.801C243.824 101.076 242.972 101.2 242.126 101.167C243.015 101.409 244.012 101.309 245.106 101.159L248.814 100.656C250.658 100.406 252.549 100.05 253.638 98.7173L254.097 98.1554L253.802 98.8179C253.409 99.7017 252.705 100.076 251.89 100.509C251.762 100.577 251.632 100.646 251.5 100.719C253.009 100.448 254.129 99.2702 254.689 98.5482C255.234 97.8468 255.685 97.0605 256.12 96.2999C256.415 95.7846 256.721 95.2519 257.054 94.7472C257.315 94.3524 257.603 93.9563 257.882 93.5725C258.869 92.2164 259.889 90.8143 259.935 89.1745L259.943 88.8721L260.113 89.1228C260.235 89.3051 260.263 89.5644 260.273 89.8239C260.629 89.0518 260.565 88.1143 260.502 87.2034L260.493 87.069C260.375 85.3355 260.253 83.5429 260.286 81.6216L260.295 81.0927L261.093 83.3095C261.005 82.0433 261.041 80.7244 261.197 79.7276L261.389 79.7576C261.204 80.9396 261.191 82.5819 261.355 84.0432L261.447 84.8637ZM223.01 89.7344C226.385 90.3164 229.648 91.8777 232.214 94.1402C232.872 94.7205 233.497 95.3551 234.101 95.9685C234.686 96.5627 235.291 97.1773 235.923 97.7401C236.852 98.5655 237.906 99.2288 238.96 99.665C237.719 99.0127 236.607 98.1147 235.754 97.0267C235.192 96.3114 234.729 95.5145 234.281 94.7432C234.026 94.3045 233.763 93.8506 233.484 93.4176C232.611 92.0577 231.736 91.1779 230.752 90.6743C230.812 90.7913 230.871 90.9082 230.931 91.0245L231.278 91.7009L230.852 91.2847C230.273 90.7181 229.568 90.3122 228.893 89.9575C228.025 89.5014 227.084 89.073 226.072 89.0268C225.157 88.985 223.587 89.0266 223.01 89.7344Z" fill="url(#paint2_linear_51_2)"/>
@@ -796,6 +805,8 @@ const SVG_TEMPLATE = `<svg width="595" height="842" viewBox="0 0 595 842" fill="
 </linearGradient>
 </defs>
 </svg>
+
+
 `;
 
 function fmtDateNL(iso){
@@ -888,6 +899,8 @@ function renderFromTemplate(){
 
   // ── pull editor values ──
   const invNo = getVal('inv-number','quote-no','invoice-no').trim();
+  const kind = (document.getElementById('doc-kind')?.value || 'offerte').toLowerCase();
+  const isOfferte = kind === 'offerte';
   const replaceMap = {
     '{{invoice_number}}': invNo,
     '{{invoice_number}': invNo, // some exports missed the closing braces
@@ -896,6 +909,13 @@ function renderFromTemplate(){
     '{{invoice_date}}': fmtDateNL(getVal('inv-date','quote-date')),
     '{{invoice_expiry_date}}': fmtDateNL(getVal('inv-expiry','valid-until')),
     '{{regarding}}': getVal('inv-subject','inv-about','regarding').trim(),
+    // ✅ new SVG placeholders
+    '{{doc_type}}': isOfferte ? 'Offerte' : 'Factuur',
+    '{{doc_type_date}}': isOfferte ? 'Offertedatum' : 'Factuurdatum',
+    '{{doc_expiry_date}}': 'Vervaldatum',
+    '{{doc_type_description}}': isOfferte
+      ? 'Gaat u akkoord met de offerte? Stuur ons dan een e-mail met uw bevestiging.'
+      : 'U wordt vriendelijk verzocht om het factuurbedrag binnen de gestelde betaaltermijn te voldoen.',
     '{{subtotal}}': '___SUB___',
     '{{vat}}': '___VAT___',
     '{{discount}}': '___DISC___',
@@ -907,7 +927,7 @@ function renderFromTemplate(){
   // ── totals ──
   const pct = parseFloat(document.getElementById('btw-pct')?.value)||0;
   const korting = parseFloat(document.getElementById('korting')?.value)||0;
-
+  const aanbetaling = parseFloat(document.getElementById('aanbetaling')?.value)||0;
   let sub = 0;
   (items || []).forEach(it=>{
     const t = parseFloat(it.tarief)||0;
@@ -915,14 +935,91 @@ function renderFromTemplate(){
     sub += t*a;
   });
   const vat = sub * pct / 100;
-  const total = sub + vat - korting;
+  const total = sub + vat - korting - aanbetaling;
 
   replaceMap['{{subtotal}}']  = eur(sub);
   replaceMap['{{vat}}']       = eur(vat);
   replaceMap['{{discount}}']  = korting ? ('-' + eur(korting)) : eur(0);
+  replaceMap['{{pre-payment}}'] = aanbetaling ? ('-' + eur(aanbetaling)) : eur(0);
   replaceMap['{{total}}']     = eur(total);
 
-  // ── dynamic rows ──
+
+  // ── hide/show Korting + Aanbetaling rows in SVG (only show when > 0) ──
+  function findTextByLiteral(lit){
+    const texts = Array.from(svg.querySelectorAll('text'));
+    for(const t of texts){
+      const tsp = Array.from(t.querySelectorAll('tspan'));
+      for(const sp of tsp){
+        if((sp.textContent||'').trim() === lit) return { text: t, tspan: sp };
+      }
+      if(!t.querySelector('tspan') && (t.textContent||'').trim() === lit) return { text: t, tspan: null };
+    }
+    return null;
+  }
+
+  const discountNode = findTextByPlaceholder('{{discount}}');
+  const discountLabel = findTextByLiteral('Korting');
+  if(korting && korting > 0){
+    if(discountNode?.text) discountNode.text.style.display = '';
+    if(discountLabel?.text) discountLabel.text.style.display = '';
+  }else{
+    if(discountNode?.text) discountNode.text.style.display = 'none';
+    if(discountLabel?.text) discountLabel.text.style.display = 'none';
+  }
+
+  const prepayNode = findTextByPlaceholder('{{pre-payment}}');
+  const prepayLabel = findTextByLiteral('Aanbetaling');
+  if(aanbetaling && aanbetaling > 0){
+    if(prepayNode?.text) prepayNode.text.style.display = '';
+    if(prepayLabel?.text) prepayLabel.text.style.display = '';
+  }else{
+    if(prepayNode?.text) prepayNode.text.style.display = 'none';
+    if(prepayLabel?.text) prepayLabel.text.style.display = 'none';
+  }
+  
+  
+  // ── if Korting is hidden but Aanbetaling is shown, move Aanbetaling up into Korting slot ──
+  // (prevents extra white space between BTW and the total bar)
+  const DISCOUNT_SLOT_Y = 639.2;  // y for "Korting" row
+  const PREPAY_SLOT_Y   = 657.2;  // y for "Aanbetaling" row (default)
+  if(prepayLabel?.tspan && prepayNode?.tspan){
+    if((!korting || korting <= 0) && (aanbetaling && aanbetaling > 0)){
+      prepayLabel.tspan.setAttribute('y', DISCOUNT_SLOT_Y);
+      prepayNode.tspan.setAttribute('y', DISCOUNT_SLOT_Y);
+    }else{
+      // restore default position when korting is present (or prepayment hidden)
+      prepayLabel.tspan.setAttribute('y', PREPAY_SLOT_Y);
+      prepayNode.tspan.setAttribute('y', PREPAY_SLOT_Y);
+    }
+  }
+
+// ── dynamic vertical repositioning of total bar + description ──
+  const totalBars = Array.from(svg.querySelectorAll('rect[fill="#9375A5"][height="31"]'));
+  const totalBar = totalBars.length ? totalBars[totalBars.length - 1] : null;
+  const totalLabel = findTextByLiteral('Totaal');
+  const totalValue = findTextByPlaceholder('{{total}}');
+  const descNode = findTextByPlaceholder('{{doc_type_description}}');
+
+  const baseY = 672;      // total bar y when both rows visible
+  const rowHeight = 18;   // height per optional row
+
+  let shiftUp = 0;
+  if(!korting || korting <= 0) shiftUp += rowHeight;
+  if(!aanbetaling || aanbetaling <= 0) shiftUp += rowHeight;
+
+  if(totalBar){
+    totalBar.setAttribute('y', baseY - shiftUp);
+  }
+  if(totalLabel?.tspan){
+    totalLabel.tspan.setAttribute('y', 692 - shiftUp);
+  }
+  if(totalValue?.tspan){
+    totalValue.tspan.setAttribute('y', 692 - shiftUp);
+  }
+  if(descNode?.tspan){
+    descNode.tspan.setAttribute('y', 795 - shiftUp);
+  }
+// ── dynamic rows ──
   const ph = {
     desc: '{{line_item_1_name}}',
     rate: '{{rate}}',
@@ -966,6 +1063,26 @@ function renderFromTemplate(){
 
 
 document.addEventListener('DOMContentLoaded', () => {
+  function syncDocKindUI(){
+    const kind = (document.getElementById('doc-kind')?.value || 'offerte').toLowerCase();
+    const isOfferte = kind === 'offerte';
+
+    const t = document.getElementById('editor-title');
+    if(t) t.textContent = isOfferte ? 'Maak een offerte' : 'Maak een factuur';
+
+    const n = document.getElementById('lbl-number');
+    if(n) n.textContent = isOfferte ? 'Offertenummer' : 'Factuurnummer';
+
+    const d = document.getElementById('lbl-date');
+    if(d) d.textContent = isOfferte ? 'Offertedatum' : 'Factuurdatum';
+
+    const e = document.getElementById('lbl-expiry');
+    if(e) e.textContent = isOfferte ? 'Vervaldatum' : 'Uiterlijke betaaldatum';
+  }
+
+  syncDocKindUI();
+  document.getElementById('doc-kind')?.addEventListener('change', syncDocKindUI);
+
   // Preview + Print
   document.getElementById('preview-btn').onclick = () => {
     renderFromTemplate();
@@ -974,8 +1091,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('preview-wrap').classList.add('open');
     window.print();
   };
-});
-
-</script>
+});</script>
 </body>
 </html>
