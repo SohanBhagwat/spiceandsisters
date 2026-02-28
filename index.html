@@ -1031,29 +1031,28 @@ function renderFromTemplate(){
   const korting = parseFloat(document.getElementById('korting')?.value)||0;
   const aanbetaling = parseFloat(document.getElementById('aanbetaling')?.value)||0;
 
-  let sub = 0;
+  let subRaw = 0;
   (items || []).forEach(it=>{
     const t = parseFloat(it.tarief)||0;
     const a = parseFloat(it.aantal)||0;
-    sub += t * a;
+    subRaw += t * a;
   });
 
+  // Document: Subtotaal is AFTER korting (grondslag)
+  const subtotal = subRaw - korting;
+
   // Discount BEFORE VAT
-  const grondslag = sub - korting;
-  const vat = grondslag * pct / 100;
+  const vat = subtotal * pct / 100;
 
   // Prepayment AFTER VAT
-  const total = grondslag + vat - aanbetaling;
+  const total = subtotal + vat - aanbetaling;
 
-  replaceMap['{{subtotal}}']  = eur(sub);
+  replaceMap['{{subtotal}}']  = eur(subtotal);
   replaceMap['{{discount}}']  = korting ? ('-' + eur(korting)) : eur(0);
   replaceMap['{{vat}}']       = eur(vat);
   replaceMap['{{pre-payment}}'] = aanbetaling ? ('-' + eur(aanbetaling)) : eur(0);
   replaceMap['{{total}}']     = eur(total);
-
-
-
-  // ── hide/show Korting + Aanbetaling rows in SVG (only show when > 0) ──
+// ── hide/show Korting + Aanbetaling rows in SVG (only show when > 0) ──
   function findTextByLiteral(lit){
     const texts = Array.from(svg.querySelectorAll('text'));
     for(const t of texts){
