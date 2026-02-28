@@ -45,6 +45,7 @@ body { font-family: 'Poppins', Arial, sans-serif; background: #f0f0f0; color: #2
 #preview-wrap.open { display:block; }
 #back-btn { display:none; max-width:794px; margin:10px auto 0; }
 #back-btn button { background:#888; color:#fff; border:none; padding:8px 18px; border-radius:4px; cursor:pointer; font-size:13px; }
+#download-btn { margin-left:10px; background:#4b7bec; }
 
 /* ══════════════════════════════════
    INVOICE — matches template exactly
@@ -225,10 +226,11 @@ thead .col-tarief, thead .col-aantal, thead .col-bedrag { text-align:right; }
 
   <div class="section-title">Totalen</div>
   <div class="row3">
-    <div><label>BTW %</label><input type="number" id="btw-pct" value="9" step="0.1"></div>
-    <div><label>Korting (€)</label><input type="number" id="korting" value="0" step="0.01"></div>
-    <div><label>Aanbetaling (€)</label><input type="number" id="aanbetaling" value="0" step="0.01"></div>
+    <div><label>BTW %</label><input type="number" id="btw-pct" value="9" step="0.1" oninput="recalc()"></div>
+    <div><label>Korting (€)</label><input type="number" id="korting" value="0" step="0.01" oninput="recalc()"></div>
+    <div><label>Aanbetaling (€)</label><input type="number" id="aanbetaling" value="0" step="0.01" oninput="recalc()"></div>
     <div><label>Subtotaal</label><input id="sub-display" readonly style="background:#f5f5f5"></div>
+    <div><label>Totaal (incl. btw)</label><input id="totalinc-display" readonly style="background:#f5f5f5"></div>
   </div>
 
   <div id="actions">
@@ -246,12 +248,18 @@ thead .col-tarief, thead .col-aantal, thead .col-bedrag { text-align:right; }
 </div>
 
 <!-- ═══ BACK BUTTON ═══ -->
-<div id="back-btn"><button onclick="showEditor()">← Terug naar editor</button></div>
+<div id="back-btn">
+  <button onclick="showEditor()">← Terug naar editor</button>
+  <button id="download-btn" onclick="downloadPDF()">Download PDF</button>
+</div>
 
 <!-- ═══ INVOICE PREVIEW ═══ -->
 <div id="preview-wrap">
   <div id="svg-preview"></div>
 </div><!-- #preview-wrap -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <script>
 // ═══ PRODUCT DATABASE ═══
@@ -318,14 +326,27 @@ function renderItems() {
 function esc(s) { return (s||'').replace(/"/g,'&quot;'); }
 
 function recalc() {
-  const sub = items.reduce((s,it) => s + bedrag(it), 0);
+  const subRaw = items.reduce((s,it) => s + bedrag(it), 0);
+
+  const pctUI = parseFloat(document.getElementById('btw-pct')?.value)||0;
+  const kortingUI = parseFloat(document.getElementById('korting')?.value)||0;
+
+  // Subtotaal on home = after korting (grondslag)
+  const sub = subRaw - kortingUI;
   document.getElementById('sub-display').value = fmt(sub);
+
+  // BTW calculated over discounted base
+  const vatUI = sub * pctUI / 100;
+  const totalIncl = sub + vatUI; // aanbetaling not shown here
+
+  const totEl = document.getElementById('totalinc-display');
+  if(totEl) totEl.value = fmt(totalIncl);
+
   // refresh readonly bedrag fields
   document.querySelectorAll('#items-list input[readonly]').forEach((el,i) => {
     if(items[i]) el.value = bedrag(items[i]) ? fmt(bedrag(items[i])) : '';
   });
 }
-
 function removeItem(i) { items.splice(i,1); renderItems(); }
 
 // ═══ MODAL ═══
@@ -433,6 +454,71 @@ function showEditor() {
   document.getElementById('preview-wrap').classList.remove('open');
 }
 
+
+function downloadPDF(){
+  // ensure latest preview SVG is rendered
+  renderFromTemplate();
+
+  const kind = (document.getElementById('doc-kind')?.value || 'offerte').toLowerCase();
+  const docType = (kind === 'offerte') ? 'Offerte' : 'Factuur';
+  const invNo = (document.getElementById('inv-number')?.value || '').trim() || 'zonder-nummer';
+
+  const svgEl = document.querySelector('#svg-preview svg');
+  if(!svgEl) return;
+
+  // Serialize SVG
+  const serializer = new XMLSerializer();
+  let svgStr = serializer.serializeToString(svgEl);
+
+  // Ensure xmlns present for standalone rendering
+  if(!svgStr.includes('xmlns="http://www.w3.org/2000/svg"')){
+    svgStr = svgStr.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+  }
+
+  const blob = new Blob([svgStr], {type: 'image/svg+xml;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+
+  const img = new Image();
+  img.onload = () => {
+    try{
+      // A4 in points is ~595.28 x 841.89. Your SVG is 595 x 842.
+      const pageW = 595.28;
+      const pageH = 841.89;
+
+      // High-res rasterization scale (increase if you want even sharper)
+      const scale = 6;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(595 * scale);
+      canvas.height = Math.round(842 * scale);
+
+      const ctx = canvas.getContext('2d');
+      // White background (prevents transparency artifacts)
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw SVG into canvas
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      const pngData = canvas.toDataURL('image/png');
+
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
+
+      // Add image to fill page exactly (no margins)
+      pdf.addImage(pngData, 'PNG', 0, 0, pageW, pageH);
+
+      pdf.save(`ss-${docType}-${invNo}.pdf`);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  };
+  img.onerror = () => {
+    URL.revokeObjectURL(url);
+    alert('Kon de PDF niet genereren. Probeer opnieuw.');
+  };
+  img.src = url;
+}
 // ═══ INIT ═══
 items.push({desc:'', subtext:'', tarief:'', aantal:''});
 renderItems();
@@ -527,35 +613,35 @@ function syncOverlay(){
 const SVG_TEMPLATE = `<svg width="595" height="842" viewBox="0 0 595 842" fill="none" xmlns="http://www.w3.org/2000/svg">
 <rect width="595" height="842" fill="#1E1E1E"/>
 <rect width="595" height="842" fill="white"/>
-<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="41" y="236.2">T.a.v. {{client_name}}&#x2028;</tspan><tspan x="41" y="254.2">{{company_name}}</tspan></text>
-<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11" font-weight="300" letter-spacing="0em"><tspan x="297.5" y="795.35" text-anchor="middle">{{doc_type_description}}</tspan></text>
+<text font-weight="200"   fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em" text-anchor="start"><tspan x="41" y="236.2">T.a.v. {{client_name}}&#x2028;</tspan><tspan x="41" y="254.2">{{company_name}}</tspan></text>
+<text font-weight="300" fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="11"  letter-spacing="0em" text-anchor="middle"><tspan x="297.5" y="777.35" text-anchor="middle" style="text-anchor: middle" font-weight="300">{{doc_type_description}}</tspan></text>
 <text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="41" y="344.2">{{doc_type_date}}:&#10;</tspan><tspan x="41" y="362.2">{{doc_expiry_date}}:&#10;</tspan><tspan x="41" y="380.2">Betreft:</tspan></text>
 <text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="182" y="344.2">{{invoice_date}}&#10;</tspan><tspan x="182" y="362.2">{{invoice_expiry_date}}&#10;</tspan><tspan x="182" y="380.2">{{regarding}}</tspan></text>
 <rect x="13" y="421" width="568" height="31" fill="#9375A5"/>
-<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0em"><tspan x="41" y="441.2">Omschrijving</tspan></text>
-<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0em"><tspan x="484" y="441.2">Bedrag</tspan></text>
-<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0em"><tspan x="371" y="441.2">Aantal</tspan></text>
-<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0em"><tspan x="288" y="441.2">Tarief</tspan></text>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12"  letter-spacing="0em"><tspan x="41" y="441.2">Omschrijving</tspan></text>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12"  letter-spacing="0em"><tspan x="484" y="441.2">Bedrag</tspan></text>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12"  letter-spacing="0em"><tspan x="371" y="441.2">Aantal</tspan></text>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12"  letter-spacing="0em"><tspan x="288" y="441.2">Tarief</tspan></text>
 <text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="41" y="480.2">{{line_item_1_name}}</tspan></text>
 <text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="371" y="480.2">{{number}}</tspan></text>
 <text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="288" y="480.2">{{rate}}</tspan></text>
-<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="371" y="621.2">9%</tspan></text>
-<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="484" y="603.2">{{subtotal}}</tspan></text>
-<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="484" y="621.2">{{vat}}</tspan></text>
-<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="484" y="639.2">{{discount}}</tspan></text>
-<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="41" y="603.2">Subtotaal</tspan></text>
-<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="41" y="621.2">BTW </tspan></text>
-<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="41" y="639.2">Korting</tspan></text>
-<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="41" y="657.2">Aanbetaling</tspan></text>
+<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="371" y="639.2">9%</tspan></text>
+<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="484" y="621.2">{{subtotal}}</tspan></text>
+<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="484" y="639.2">{{vat}}</tspan></text>
+<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="484" y="603.2">{{discount}}</tspan></text>
 <text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="484" y="657.2">{{pre-payment}}</tspan></text>
+<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="41" y="621.2">Subtotaal</tspan></text>
+<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="41" y="639.2">BTW </tspan></text>
+<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="41" y="603.2">Korting</tspan></text>
+<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="41" y="657.2">Aanbetaling</tspan></text>
 <rect x="13" y="672" width="568" height="31" fill="#9375A5"/>
 <text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="484" y="692.2">{{total}}</tspan></text>
-<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" font-weight="bold" letter-spacing="0em"><tspan x="41" y="692.2">Totaal</tspan></text>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12"  letter-spacing="0em"><tspan x="41" y="692.2">Totaal</tspan></text>
 <text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="484" y="480.2">{{line_total}}</tspan></text>
 <text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="452.047" y="78.2">Spice and Sisters</tspan></text>
 <text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="413.34" y="107.2">KvK-nummer: 97840351&#10;</tspan><tspan x="364.297" y="125.2">BTW-nummer: NL868254848B01&#10;</tspan><tspan x="398.902" y="143.2">IBAN: NL68INGB0749814713</tspan></text>
 <text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="12" letter-spacing="0em"><tspan x="408.27" y="172.2">Mobiel: +31 6 31 36 94 59&#10;</tspan><tspan x="348.844" y="190.2">E-mail: info@spiceandsisters.com</tspan></text>
-<text fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="24" font-weight="300" letter-spacing="0em"><tspan x="41" y="196.4">{{doc_type}} {{invoice_number}}</tspan></text>
+<text font-weight="300" fill="black" style="white-space: pre" xml:space="preserve" font-family="Poppins" font-size="24"  letter-spacing="0em"><tspan x="41" y="196.4" font-weight="300">{{doc_type}} {{invoice_number}}</tspan></text>
 <path d="M260.643 80.011C260.576 80.0322 260.359 80.0826 260.129 80.1361C259.914 80.1859 259.67 80.2423 259.611 80.2621L259.583 80.2669C259.119 80.2803 258.791 80.6449 258.443 81.0311C258.322 81.1663 258.195 81.3062 258.064 81.4295C257.063 82.3631 255.638 82.3789 254.26 82.3941C253.73 82.4002 253.182 82.406 252.669 82.4648C250.528 82.7111 248.392 84.0671 246.809 86.1847C246.684 86.3536 246.561 86.5258 246.439 86.6982C246.062 87.2292 245.673 87.7785 245.176 88.2193C244.643 88.6915 244.004 89.0248 243.386 89.3473C241.751 90.2008 240.059 91.0833 238.24 91.6419C236.258 92.2502 234.063 92.3556 232.369 91.9235L232.417 91.736C234.078 92.1596 236.233 92.055 238.183 91.4566C239.985 90.9033 241.668 90.0251 243.296 89.1758C243.903 88.8588 244.532 88.531 245.047 88.0745C245.527 87.649 245.91 87.1087 246.28 86.5868C246.404 86.4129 246.527 86.2389 246.654 86.0691C248.268 83.9092 250.452 82.5253 252.647 82.2727C253.17 82.2125 253.723 82.2062 254.258 82.2007C255.661 82.1849 256.986 82.1703 257.931 81.288C258.057 81.1708 258.18 81.0342 258.299 80.9018C258.656 80.5056 259.024 80.096 259.565 80.0738C259.646 80.0495 259.86 80 260.086 79.9475C260.301 79.8974 260.524 79.8455 260.583 79.8267L260.643 80.011Z" fill="url(#paint0_linear_51_2)"/>
 <path d="M240.213 95.4882C239.502 95.5309 238.987 95.6706 238.288 95.6566C237.821 95.6549 237.356 95.6182 236.893 95.6104C236.564 95.6166 236.235 95.6454 235.909 95.595C235.777 95.5775 235.521 95.5291 235.385 95.4827C235.505 95.5443 235.633 95.587 235.763 95.6297C236.311 95.8081 236.898 95.7616 237.464 95.8567C238.361 96.0037 239.242 95.864 240.044 95.7751C240.557 95.7422 241.074 95.7092 241.568 95.5503C242.251 95.329 242.879 94.959 243.522 94.6413C242.399 95.0399 241.344 95.4999 240.213 95.4882Z" fill="url(#paint1_linear_51_2)"/>
 <path d="M261.447 84.8637L260.475 82.1642C260.478 83.873 260.581 85.4889 260.686 87.0546L260.696 87.189C260.767 88.2299 260.848 89.4101 260.224 90.2952L259.995 90.6206L260.049 90.2263C260.074 90.0457 260.083 89.8807 260.078 89.7364C259.85 91.1958 258.931 92.4591 258.04 93.6851C257.762 94.067 257.475 94.4618 257.217 94.8529C256.887 95.3527 256.583 95.8828 256.289 96.3952C255.85 97.1613 255.396 97.9538 254.843 98.666C254.207 99.4857 252.87 100.874 251.053 100.964L250.671 100.983L250.997 100.785C251.274 100.617 251.541 100.475 251.799 100.337C252.274 100.085 252.71 99.8529 253.061 99.5259C251.922 100.361 250.365 100.64 248.84 100.847L245.133 101.351C243.736 101.541 242.491 101.653 241.4 101.093L240.886 100.829L241.459 100.911C242.191 101.016 242.939 100.997 243.662 100.857C242.61 100.858 241.544 100.675 240.523 100.333L240.522 100.336C238.946 100.048 237.223 99.1546 235.794 97.8844C235.157 97.3176 234.55 96.7009 233.962 96.1043C233.36 95.4928 232.738 94.8606 232.085 94.2854C229.508 92.0128 226.22 90.4553 222.827 89.9002L222.687 89.8774L222.759 89.7554C223.274 88.8909 224.849 88.777 226.081 88.8338C227.13 88.8818 228.096 89.3202 228.984 89.7868C229.528 90.0724 230.091 90.3916 230.599 90.8019C230.548 90.7042 230.497 90.606 230.447 90.509L230.319 90.2647L230.572 90.375C231.699 90.8684 232.677 91.8021 233.647 93.3135C233.928 93.7501 234.193 94.2061 234.449 94.6466C234.894 95.4121 235.353 96.2031 235.906 96.9078C237.92 99.4755 241.406 100.964 244.579 100.612L245.442 100.517L244.622 100.801C243.824 101.076 242.972 101.2 242.126 101.167C243.015 101.409 244.012 101.309 245.106 101.159L248.814 100.656C250.658 100.406 252.549 100.05 253.638 98.7173L254.097 98.1554L253.802 98.8179C253.409 99.7017 252.705 100.076 251.89 100.509C251.762 100.577 251.632 100.646 251.5 100.719C253.009 100.448 254.129 99.2702 254.689 98.5482C255.234 97.8468 255.685 97.0605 256.12 96.2999C256.415 95.7846 256.721 95.2519 257.054 94.7472C257.315 94.3524 257.603 93.9563 257.882 93.5725C258.869 92.2164 259.889 90.8143 259.935 89.1745L259.943 88.8721L260.113 89.1228C260.235 89.3051 260.263 89.5644 260.273 89.8239C260.629 89.0518 260.565 88.1143 260.502 87.2034L260.493 87.069C260.375 85.3355 260.253 83.5429 260.286 81.6216L260.295 81.0927L261.093 83.3095C261.005 82.0433 261.041 80.7244 261.197 79.7276L261.389 79.7576C261.204 80.9396 261.191 82.5819 261.355 84.0432L261.447 84.8637ZM223.01 89.7344C226.385 90.3164 229.648 91.8777 232.214 94.1402C232.872 94.7205 233.497 95.3551 234.101 95.9685C234.686 96.5627 235.291 97.1773 235.923 97.7401C236.852 98.5655 237.906 99.2288 238.96 99.665C237.719 99.0127 236.607 98.1147 235.754 97.0267C235.192 96.3114 234.729 95.5145 234.281 94.7432C234.026 94.3045 233.763 93.8506 233.484 93.4176C232.611 92.0577 231.736 91.1779 230.752 90.6743C230.812 90.7913 230.871 90.9082 230.931 91.0245L231.278 91.7009L230.852 91.2847C230.273 90.7181 229.568 90.3122 228.893 89.9575C228.025 89.5014 227.084 89.073 226.072 89.0268C225.157 88.985 223.587 89.0266 223.01 89.7344Z" fill="url(#paint2_linear_51_2)"/>
@@ -805,10 +891,7 @@ const SVG_TEMPLATE = `<svg width="595" height="842" viewBox="0 0 595 842" fill="
 </linearGradient>
 </defs>
 </svg>
-
-
 `;
-
 function fmtDateNL(iso){
   if(!iso) return '';
   const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -928,20 +1011,27 @@ function renderFromTemplate(){
   const pct = parseFloat(document.getElementById('btw-pct')?.value)||0;
   const korting = parseFloat(document.getElementById('korting')?.value)||0;
   const aanbetaling = parseFloat(document.getElementById('aanbetaling')?.value)||0;
+
   let sub = 0;
   (items || []).forEach(it=>{
     const t = parseFloat(it.tarief)||0;
     const a = parseFloat(it.aantal)||0;
-    sub += t*a;
+    sub += t * a;
   });
-  const vat = sub * pct / 100;
-  const total = sub + vat - korting - aanbetaling;
+
+  // Discount BEFORE VAT
+  const grondslag = sub - korting;
+  const vat = grondslag * pct / 100;
+
+  // Prepayment AFTER VAT
+  const total = grondslag + vat - aanbetaling;
 
   replaceMap['{{subtotal}}']  = eur(sub);
-  replaceMap['{{vat}}']       = eur(vat);
   replaceMap['{{discount}}']  = korting ? ('-' + eur(korting)) : eur(0);
+  replaceMap['{{vat}}']       = eur(vat);
   replaceMap['{{pre-payment}}'] = aanbetaling ? ('-' + eur(aanbetaling)) : eur(0);
   replaceMap['{{total}}']     = eur(total);
+
 
 
   // ── hide/show Korting + Aanbetaling rows in SVG (only show when > 0) ──
@@ -957,105 +1047,138 @@ function renderFromTemplate(){
     return null;
   }
 
-  const discountNode = findTextByPlaceholder('{{discount}}');
-  const discountLabel = findTextByLiteral('Korting');
-  if(korting && korting > 0){
-    if(discountNode?.text) discountNode.text.style.display = '';
-    if(discountLabel?.text) discountLabel.text.style.display = '';
+// Identify fixed rows
+  const labelKorting   = findTextByLiteral('Korting');
+  const valKorting     = findTextByPlaceholder('{{discount}}');
+
+  const labelSub       = findTextByLiteral('Subtotaal');
+  const valSub         = findTextByPlaceholder('{{subtotal}}');
+
+  const labelVat       = findTextByLiteral('BTW');
+  const valVat         = findTextByPlaceholder('{{vat}}');
+
+  const vatPctNode    = findTextByLiteral(String(pct) + '%');
+  const labelPrepay    = findTextByLiteral('Aanbetaling');
+  const valPrepay      = findTextByPlaceholder('{{pre-payment}}');
+
+  const labelTotal     = findTextByLiteral('Totaal');
+  const valTotal       = findTextByPlaceholder('{{total}}');
+
+  const descNode       = findTextByPlaceholder('{{doc_type_description}}');
+
+  const bars = Array.from(svg.querySelectorAll('rect[fill="#9375A5"][height="31"]'));
+  const bottomTotalBar = bars.length ? bars[bars.length - 1] : null;
+
+  const rowH = 18;
+  function shiftTextNodeY(node, dy){
+    if(!node?.tspan) return;
+    const y = parseFloat(node.tspan.getAttribute('y'));
+    if(!Number.isNaN(y)) node.tspan.setAttribute('y', String(y + dy));
+  }
+  function shiftRectY(rect, dy){
+    if(!rect) return;
+    const y = parseFloat(rect.getAttribute('y'));
+    if(!Number.isNaN(y)) rect.setAttribute('y', String(y + dy));
+  }
+  const hideKorting = (!korting || korting <= 0);
+  const hidePrepay  = (!aanbetaling || aanbetaling <= 0);
+
+  // Hide/show Korting row
+  if(hideKorting){
+    if(labelKorting?.text) labelKorting.text.style.display = 'none';
+    if(valKorting?.text)   valKorting.text.style.display = 'none';
   }else{
-    if(discountNode?.text) discountNode.text.style.display = 'none';
-    if(discountLabel?.text) discountLabel.text.style.display = 'none';
+    if(labelKorting?.text) labelKorting.text.style.display = '';
+    if(valKorting?.text)   valKorting.text.style.display = '';
   }
 
-  const prepayNode = findTextByPlaceholder('{{pre-payment}}');
-  const prepayLabel = findTextByLiteral('Aanbetaling');
-  if(aanbetaling && aanbetaling > 0){
-    if(prepayNode?.text) prepayNode.text.style.display = '';
-    if(prepayLabel?.text) prepayLabel.text.style.display = '';
+  // Hide/show Aanbetaling row
+  if(hidePrepay){
+    if(labelPrepay?.text) labelPrepay.text.style.display = 'none';
+    if(valPrepay?.text)   valPrepay.text.style.display = 'none';
   }else{
-    if(prepayNode?.text) prepayNode.text.style.display = 'none';
-    if(prepayLabel?.text) prepayLabel.text.style.display = 'none';
+    if(labelPrepay?.text) labelPrepay.text.style.display = '';
+    if(valPrepay?.text)   valPrepay.text.style.display = '';
   }
+
+  // Shift all rows BELOW Korting up if Korting is hidden
+  let dy = 0;
+  if(hideKorting){
+    dy -= rowH;
+    shiftTextNodeY(labelSub, dy);   shiftTextNodeY(valSub, dy);
+    shiftTextNodeY(labelVat, dy);   shiftTextNodeY(valVat, dy);   shiftTextNodeY(vatPctNode, dy);
+    shiftTextNodeY(labelPrepay, dy);shiftTextNodeY(valPrepay, dy);
+    shiftTextNodeY(labelTotal, dy); shiftTextNodeY(valTotal, dy);
+    shiftRectY(bottomTotalBar, dy);
+    shiftTextNodeY(descNode, dy);
+  }
+
+  // Additionally, if Aanbetaling is hidden, shift Total + bar + description up by one row
+  if(hidePrepay){
+    const dy2 = -rowH;
+    shiftTextNodeY(labelTotal, dy2);
+    shiftTextNodeY(valTotal, dy2);
+    shiftRectY(bottomTotalBar, dy2);
+    shiftTextNodeY(descNode, dy2);
+  }
+
+      
   
-  
-  // ── if Korting is hidden but Aanbetaling is shown, move Aanbetaling up into Korting slot ──
-  // (prevents extra white space between BTW and the total bar)
-  const DISCOUNT_SLOT_Y = 639.2;  // y for "Korting" row
-  const PREPAY_SLOT_Y   = 657.2;  // y for "Aanbetaling" row (default)
-  if(prepayLabel?.tspan && prepayNode?.tspan){
-    if((!korting || korting <= 0) && (aanbetaling && aanbetaling > 0)){
-      prepayLabel.tspan.setAttribute('y', DISCOUNT_SLOT_Y);
-      prepayNode.tspan.setAttribute('y', DISCOUNT_SLOT_Y);
-    }else{
-      // restore default position when korting is present (or prepayment hidden)
-      prepayLabel.tspan.setAttribute('y', PREPAY_SLOT_Y);
-      prepayNode.tspan.setAttribute('y', PREPAY_SLOT_Y);
-    }
+  // ── line items into SVG (clone the 1st row template) ──
+  // template placeholders on the first row:
+  // {{line_item_1_name}}, {{rate}}, {{number}}, {{line_total}}
+  const tplDesc  = findTextByPlaceholder('{{line_item_1_name}}');
+  const tplRate  = findTextByPlaceholder('{{rate}}');
+  const tplQty   = findTextByPlaceholder('{{number}}');
+  const tplTotal = findTextByPlaceholder('{{line_total}}');
+
+  // remove previously cloned rows (re-render safe)
+  svg.querySelectorAll('[data-dyn-row="1"]').forEach(n => n.remove());
+
+  const rowStep = 24; // px between rows in the design
+  const baseY = tplDesc?.tspan ? parseFloat(tplDesc.tspan.getAttribute('y')) : null;
+  const parent = tplDesc?.text?.parentNode;
+
+  function setFirstRow(desc, rate, qty, total){
+    if(tplDesc?.tspan)  tplDesc.tspan.textContent  = desc;
+    if(tplRate?.tspan)  tplRate.tspan.textContent  = rate;
+    if(tplQty?.tspan)   tplQty.tspan.textContent   = qty;
+    if(tplTotal?.tspan) tplTotal.tspan.textContent = total;
   }
 
-// ── dynamic vertical repositioning of total bar + description ──
-  const totalBars = Array.from(svg.querySelectorAll('rect[fill="#9375A5"][height="31"]'));
-  const totalBar = totalBars.length ? totalBars[totalBars.length - 1] : null;
-  const totalLabel = findTextByLiteral('Totaal');
-  const totalValue = findTextByPlaceholder('{{total}}');
-  const descNode = findTextByPlaceholder('{{doc_type_description}}');
-
-  const baseY = 672;      // total bar y when both rows visible
-  const rowHeight = 18;   // height per optional row
-
-  let shiftUp = 0;
-  if(!korting || korting <= 0) shiftUp += rowHeight;
-  if(!aanbetaling || aanbetaling <= 0) shiftUp += rowHeight;
-
-  if(totalBar){
-    totalBar.setAttribute('y', baseY - shiftUp);
-  }
-  if(totalLabel?.tspan){
-    totalLabel.tspan.setAttribute('y', 692 - shiftUp);
-  }
-  if(totalValue?.tspan){
-    totalValue.tspan.setAttribute('y', 692 - shiftUp);
-  }
-  if(descNode?.tspan){
-    descNode.tspan.setAttribute('y', 795 - shiftUp);
-  }
-// ── dynamic rows ──
-  const ph = {
-    desc: '{{line_item_1_name}}',
-    rate: '{{rate}}',
-    qty:  '{{number}}',
-    tot:  '{{line_total}}'
-  };
-
-  const tplDesc = findTextByPlaceholder(ph.desc);
-  const tplRate = findTextByPlaceholder(ph.rate);
-  const tplQty  = findTextByPlaceholder(ph.qty);
-  const tplTot  = findTextByPlaceholder(ph.tot);
-
-  if(tplDesc && tplRate && tplQty && tplTot){
-    // Baseline y + row height inferred from the placeholder tspan y and font-size
-    const baseY = tplDesc.tspan ? parseFloat(tplDesc.tspan.getAttribute('y')||'0') : parseFloat(tplDesc.text.getAttribute('y')||'0');
-    const fs = parseFloat(tplDesc.text.getAttribute('font-size') || (tplDesc.tspan ? tplDesc.tspan.getAttribute('font-size') : '') || '12');
-    const rowH = Math.round(fs * 2.2);
-
-    const parent = tplDesc.text.parentNode || svg;
-
-    // remove template placeholders BEFORE replacing other placeholders (so we don't accidentally rewrite them)
-    [tplDesc.text, tplRate.text, tplQty.text, tplTot.text].forEach(n=>n && n.parentNode && n.parentNode.removeChild(n));
-
-    // Insert rows
-    (items || []).forEach((it,i)=>{
+  if(!items || items.length === 0 || !tplDesc || !tplRate || !tplQty || !tplTotal || !parent || baseY === null || Number.isNaN(baseY)){
+    // no items: clear row
+    setFirstRow('', '', '', '');
+  } else {
+    items.forEach((it, i) => {
       const t = parseFloat(it.tarief)||0;
       const a = parseFloat(it.aantal)||0;
-      const line = t*a;
-      const y = baseY + i*rowH;
+      const b = (t*a);
+      const desc = (it.desc||'') + (it.subtext ? (' ' + it.subtext) : '');
+      const rate = t ? eur(t) : '';
+      const qty  = a ? String(a) : '';
+      const total= b ? eur(b) : '';
 
-      parent.appendChild(cloneRowCell(tplDesc.text, tplDesc.tspan, (it.desc||''), y));
-      parent.appendChild(cloneRowCell(tplRate.text, tplRate.tspan, t ? eur(t) : '', y));
-      parent.appendChild(cloneRowCell(tplQty.text,  tplQty.tspan,  a ? String(a) : '', y));
-      parent.appendChild(cloneRowCell(tplTot.text,  tplTot.tspan,  line ? eur(line) : '', y));
+      const y = baseY + i * rowStep;
+
+      if(i === 0){
+        // populate the template row
+        setFirstRow(desc, rate, qty, total);
+      } else {
+        // clone 4 cells
+        const c1 = cloneRowCell(tplDesc.text,  tplDesc.tspan,  desc,  y);
+        const c2 = cloneRowCell(tplRate.text,  tplRate.tspan,  rate,  y);
+        const c3 = cloneRowCell(tplQty.text,   tplQty.tspan,   qty,   y);
+        const c4 = cloneRowCell(tplTotal.text, tplTotal.tspan, total, y);
+        [c1,c2,c3,c4].forEach(c => c.setAttribute('data-dyn-row','1'));
+        parent.appendChild(c1);
+        parent.appendChild(c2);
+        parent.appendChild(c3);
+        parent.appendChild(c4);
+      }
     });
   }
+
 
   // ── placeholder replacements (safe: operate at tspan level so we don't destroy layout) ──
   replaceInTspans(replaceMap);
@@ -1089,8 +1212,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('editor').style.display = 'none';
     document.getElementById('back-btn').style.display = 'block';
     document.getElementById('preview-wrap').classList.add('open');
-    window.print();
+    
   };
 });</script>
-</body>
+</body>>
 </html>
